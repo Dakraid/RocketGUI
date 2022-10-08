@@ -1,242 +1,217 @@
-﻿using System;
+﻿namespace RocketGUI.Core.Graphs;
+
+using Listings;
+
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
+
 using UnityEngine;
-using UnityEngine.UIElements;
+
 using Verse;
 
-namespace RocketGUI
+public class Grapher
 {
-    public class Grapher
+    public const int GraphMaxPointsNum = 1500;
+
+    public const int Scales = 4;
+
+    private readonly ListingCollapsible _collapsible = new(scrollViewOnOverflow: false);
+
+    public string _description = string.Empty;
+
+    private readonly List<Action<Rect>> _header;
+
+    private bool _mouseIsOver;
+
+    private GraphPoint _mouseIsOverPoint = new(0, 0, Color.white);
+
+    private readonly GraphPointCollection _points = new();
+
+    private readonly List<GraphPoint> _pointsQueue = new();
+
+    public string _title = string.Empty;
+
+    public Grapher(string title, string description = null)
     {
-        public const int GraphMaxPointsNum = 1500;
+        _title       = title;
+        _description = description ?? string.Empty;
 
-        public const int Scales = 4;
-
-        public struct GraphPoint
+        _header = new List<Action<Rect>>
         {
-            public float t;
-
-            public float y;
-
-            public Color color;
-
-            public GraphPoint(float t, float y, Color color)
+            rect =>
             {
-                this.t = t;
-                this.y = y;
-                this.color = color;
-            }
-        }
-
-        private List<GraphPoint> pointsQueue = new List<GraphPoint>();
-
-        private GraphPointCollection points = new GraphPointCollection();
-
-        private Listing_Collapsible collapsible = new Listing_Collapsible(scrollViewOnOverflow: false);
-
-        private GraphPoint mouseIsOverPoint = new GraphPoint(0, 0, Color.white);
-
-        private bool mouseIsOver = false;
-
-        private List<Action<Rect>> header;
-
-        public string description = string.Empty;
-
-        public string title = string.Empty;
-
-        private IEnumerable<GraphPoint> Range
-        {
-            get => points.Points;
-        }
-
-        private float RangeT
-        {
-            get => points.RangeT;
-        }
-
-        private float RangeY
-        {
-            get => points.RangeY;
-        }
-
-        public float MinY
-        {
-            get => points.MinY;
-        }
-
-        public float MaxY
-        {
-            get => points.MaxY;
-        }
-
-        public float MinT
-        {
-            get => points.MinT;
-        }
-
-        public float MaxT
-        {
-            get => points.MaxT;
-        }
-
-        public float TimeWindowSize
-        {
-            get => points.TargetTimeWindowSize;
-            set => points.TargetTimeWindowSize = value;
-        }
-
-        public Listing_Collapsible.Group_Collapsible Group
-        {
-            get => collapsible.Group;
-            set => collapsible.Group = value;
-        }
-
-        public Grapher(string title, string description = null)
-        {
-            this.title = title;
-            this.description = description ?? string.Empty;
-            this.header = new List<Action<Rect>>()
+                Text.Font   =  GameFont.Tiny;
+                Text.Anchor =  TextAnchor.MiddleLeft;
+                rect.xMin   += 25;
+                Widgets.Label(rect, $"Min T:<color=cyan>{Math.Round(MinT, 4)}</color>");
+            },
+            rect =>
             {
-                (rect) =>
+                if (_mouseIsOver)
                 {
-                    Text.Font = GameFont.Tiny;
-                    Text.Anchor = TextAnchor.MiddleLeft;
-                    rect.xMin += 25;
-                    Widgets.Label(rect , $"Min T:<color=cyan>{Math.Round(MinT, 4)}</color>");
-                },
-                (rect) =>
-                {
-                    if(mouseIsOver){
-                        Text.Font = GameFont.Tiny;
-                        Text.Anchor = TextAnchor.MiddleCenter;
-                        Widgets.Label(rect , $"Current:(<color=cyan>{Math.Round(mouseIsOverPoint.t, 4)}</color>,<color=cyan>{Math.Round(mouseIsOverPoint.y, 4)}</color>)");
-                    }
-                },
-                (rect) =>
-                {
-                    Text.Font = GameFont.Tiny;
-                    Text.Anchor = TextAnchor.MiddleRight;
-                    Widgets.Label(rect , $"Max T:<color=cyan>{Math.Round(MinT + RangeT, 4)}</color>");
+                    Text.Font   = GameFont.Tiny;
+                    Text.Anchor = TextAnchor.MiddleCenter;
+                    Widgets.Label(rect, $"Current:(<color=cyan>{Math.Round(_mouseIsOverPoint._t, 4)}</color>,<color=cyan>{Math.Round(_mouseIsOverPoint._y, 4)}</color>)");
                 }
-            };
-        }
-
-        public float this[float t]
-        {
-            set => Add(t, value);
-        }
-
-        public void Add(float t, float y)
-        {
-            this.Add(t, y, Color.cyan);
-        }
-
-        public void Add(float t, float y, Color color)
-        {
-
-            GraphPoint point = new GraphPoint();
-            point.t = t;
-            point.y = y;
-            point.color = color;
-            pointsQueue.Add(point);
-        }
-
-        public void Dirty()
-        {
-            points.Rebuild();
-        }
-
-        public void Plot(ref Rect inRect)
-        {
-            if (pointsQueue.Count > 0 && collapsible.Expanded)
+            },
+            rect =>
             {
-                foreach (GraphPoint point in pointsQueue)
-                {
-                    points.Add(point);
-                }
-                points.Rebuild();
-                pointsQueue.Clear();
+                Text.Font   = GameFont.Tiny;
+                Text.Anchor = TextAnchor.MiddleRight;
+                Widgets.Label(rect, $"Max T:<color=cyan>{Math.Round(MinT + RangeT, 4)}</color>");
             }
-            collapsible.Begin(inRect, this.title);
-            if (points.Ready && points.Count > 24)
-            {
-                GUI.color = Color.white;
-                collapsible.Columns(15, this.header);
-                collapsible.Line(1);
-                collapsible.Lambda(100, this.Draw);
+        };
+    }
 
-                if (!description.NullOrEmpty())
-                {
-                    collapsible.Line(1);
-                    collapsible.Label(description);
-                }
-            }
-            collapsible.End(ref inRect);
-        }
+    private IEnumerable<GraphPoint> Range => _points.Points;
 
-        private void Draw(Rect rect)
+    private float RangeT => _points.RangeT;
+
+    private float RangeY => _points.RangeY;
+
+    public float MinY => _points.MinY;
+
+    public float MaxY => _points.MaxY;
+
+    public float MinT => _points.MinT;
+
+    public float MaxT => _points.MaxT;
+
+    public float TimeWindowSize
+    {
+        get => _points.TargetTimeWindowSize;
+        set => _points.TargetTimeWindowSize = value;
+    }
+
+    public ListingCollapsible.GroupCollapsible Group
+    {
+        get => _collapsible.Group;
+        set => _collapsible.Group = value;
+    }
+
+    public float this[float t]
+    {
+        set => Add(t, value);
+    }
+
+    public void Add(float t, float y) => Add(t, y, Color.cyan);
+
+    public void Add(float t, float y, Color color)
+    {
+        var point = new GraphPoint();
+        point._t     = t;
+        point._y     = y;
+        point._color = color;
+        _pointsQueue.Add(point);
+    }
+
+    public void Dirty() => _points.Rebuild();
+
+    public void Plot(ref Rect inRect)
+    {
+        if (_pointsQueue.Count > 0 && _collapsible.Expanded)
         {
-            Widgets.DrawBoxSolid(rect, Color.black);
-            if (!points.Ready)
-            {
-                Text.Font = GameFont.Small;
-                Text.Anchor = TextAnchor.MiddleCenter;
-                Widgets.Label(rect, "Preparing");
-                return;
-            }
+            foreach (var point in _pointsQueue) { _points.Add(point); }
+            _points.Rebuild();
+            _pointsQueue.Clear();
+        }
+        _collapsible.Begin(inRect, _title);
+
+        if (_points.Ready && _points.Count > 24)
+        {
             GUI.color = Color.white;
-            Text.Font = GameFont.Tiny;
-            Text.Anchor = TextAnchor.MiddleLeft;
+            _collapsible.Columns(15, _header);
+            _collapsible.Line(1);
+            _collapsible.Lambda(100, Draw);
 
-            rect = rect.ContractedBy(5);
-            float width = rect.width;
-            float height = rect.height;
-
-            Rect textRect = new Rect(Vector2.zero, Text.CalcSize("0.00000"));
-            float textOffset = textRect.width + 5;
-            float x0 = rect.xMin;
-            float x1 = rect.xMax;
-            for (int i = 0; i <= 5; i++)
+            if (!_description.NullOrEmpty())
             {
-                float y = height * i / 5;
-                textRect.x = x0;
-                textRect.y = rect.yMax - y - textRect.height / 2;
-                Widgets.DrawLine(new Vector2(x0 + 2 + textOffset, rect.yMax - y), new Vector2(x1 - 2, rect.yMax - y), Color.gray, 1);
-                Widgets.Label(textRect, $"{ Math.Round(MinY + RangeY * (i / 5f), 3) }");
+                _collapsible.Line(1);
+                _collapsible.Label(_description);
             }
+        }
+        _collapsible.End(ref inRect);
+    }
 
-            width -= textOffset;
-            rect.xMin += textOffset;
+    private void Draw(Rect rect)
+    {
+        Widgets.DrawBoxSolid(rect, Color.black);
 
-            this.mouseIsOver = false;
+        if (!_points.Ready)
+        {
+            Text.Font   = GameFont.Small;
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Widgets.Label(rect, "Preparing");
 
-            Vector2 v0 = new Vector2();
-            Vector2 v1 = new Vector2();
+            return;
+        }
+        GUI.color   = Color.white;
+        Text.Font   = GameFont.Tiny;
+        Text.Anchor = TextAnchor.MiddleLeft;
 
-            v0.x = rect.xMin;
-            v0.y = rect.yMax - (points.First.y - MinY) / RangeY * height;
+        rect = rect.ContractedBy(5);
+        var width  = rect.width;
+        var height = rect.height;
 
-            Rect hoverRect = new Rect(v0.x, rect.y + 2, 0, rect.height - 2);
+        var textRect   = new Rect(Vector2.zero, Text.CalcSize("0.00000"));
+        var textOffset = textRect.width + 5;
+        var x0         = rect.xMin;
+        var x1         = rect.xMax;
 
-            foreach (GraphPoint p in Range)
+        for (var i = 0; i <= 5; i++)
+        {
+            var y = height * i / 5;
+            textRect.x = x0;
+            textRect.y = rect.yMax - y - textRect.height / 2;
+            Widgets.DrawLine(new Vector2(x0 + 2 + textOffset, rect.yMax - y), new Vector2(x1 - 2, rect.yMax - y), Color.gray, 1);
+            Widgets.Label(textRect, $"{Math.Round(MinY + RangeY * (i / 5f), 3)}");
+        }
+
+        width     -= textOffset;
+        rect.xMin += textOffset;
+
+        _mouseIsOver = false;
+
+        var v0 = new Vector2();
+        var v1 = new Vector2();
+
+        v0.x = rect.xMin;
+        v0.y = rect.yMax - (_points.First._y - MinY) / RangeY * height;
+
+        var hoverRect = new Rect(v0.x, rect.y + 2, 0, rect.height - 2);
+
+        foreach (var p in Range)
+        {
+            v1.x = rect.xMin + (p._t - MinT) / RangeT * width;
+            v1.y = rect.yMax - (p._y - MinY) / RangeY * height;
+
+            hoverRect.xMin = v0.x;
+            hoverRect.xMax = v1.x;
+            Widgets.DrawLine(v0, v1, p._color, 1);
+
+            if (Mouse.IsOver(hoverRect))
             {
-                v1.x = rect.xMin + (p.t - MinT) / RangeT * width;
-                v1.y = rect.yMax - (p.y - MinY) / RangeY * height;
-
-                hoverRect.xMin = v0.x;
-                hoverRect.xMax = v1.x;
-                Widgets.DrawLine(v0, v1, p.color, 1);
-
-                if (Mouse.IsOver(hoverRect))
-                {
-                    Widgets.DrawBoxSolid(hoverRect.RightPartPixels(1), Color.gray);
-                    mouseIsOverPoint = p;
-                    mouseIsOver = true;
-                }
-                v0 = v1;
+                Widgets.DrawBoxSolid(hoverRect.RightPartPixels(1), Color.gray);
+                _mouseIsOverPoint = p;
+                _mouseIsOver      = true;
             }
+            v0 = v1;
+        }
+    }
+
+    public struct GraphPoint
+    {
+        public float _t;
+
+        public float _y;
+
+        public Color _color;
+
+        public GraphPoint(float t, float y, Color color)
+        {
+            _t     = t;
+            _y     = y;
+            _color = color;
         }
     }
 }

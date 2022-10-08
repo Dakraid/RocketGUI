@@ -1,101 +1,86 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using RimWorld;
+﻿namespace RocketGUI.Core;
+
 using UnityEngine;
 using Verse;
-using Verse.Sound;
 
-namespace RocketGUI
+public static partial class GUIUtility
 {
-    public static partial class GUIUtility
+    private static int _depth;
+    private static GUIState _initialState;
+
+    public static void StashGUIState()
     {
-        private struct FontState
+        if (GUIUtility._depth == 0) { GUIUtility._initialState = GUIState.Copy(); }
+        GUIUtility._depth++;
+    }
+
+    public static void RestoreGUIState()
+    {
+        GUIUtility._initialState.Restore();
+        GUIUtility._depth--;
+    }
+
+    public static void ClearGUIState()
+    {
+        GUIUtility._depth = 0;
+        GUIUtility._initialState.Restore();
+    }
+
+    private readonly struct FontState
+    {
+        private readonly GameFont _font;
+        private readonly GUIStyle _curStyle;
+
+        public FontState(GameFont font)
         {
-            public GameFont font;
-            public GUIStyle curStyle;
-
-            public FontState(GameFont font)
-            {
-                var a = Text.Font;
-                Text.Font = font;
-                this.font = font;
-                this.curStyle = new GUIStyle(Text.CurFontStyle);
-                Text.Font = a;
-            }
-
-            public void Restore()
-            {
-                Text.Font = font;
-                Text.CurFontStyle.fontSize = curStyle.fontSize;
-                Text.CurFontStyle.fontStyle = curStyle.fontStyle;
-                Text.CurFontStyle.alignment = curStyle.alignment;
-            }
+            var a = Text.Font;
+            Text.Font  = font;
+            _font = font;
+            _curStyle  = new GUIStyle(Text.CurFontStyle);
+            Text.Font  = a;
         }
 
-        private struct GUIState
+        public void Restore()
         {
-            public GameFont gameFont;
-            public FontState[] fonts;
-            public Color color;
-            public Color contentColor;
-            public Color backgroundColor;
-            public bool wordWrap;
+            Text.Font                   = _font;
+            Text.CurFontStyle.fontSize  = _curStyle.fontSize;
+            Text.CurFontStyle.fontStyle = _curStyle.fontStyle;
+            Text.CurFontStyle.alignment = _curStyle.alignment;
+        }
+    }
 
-            public static GUIState Copy()
+    private struct GUIState
+    {
+        private GameFont _gameFont;
+        private FontState[] _fonts;
+        private Color _color;
+        private Color _contentColor;
+        private Color _backgroundColor;
+        private bool _wordWrap;
+
+        public static GUIState Copy() =>
+            new()
             {
-                return new GUIState()
+                _gameFont = Text.Font,
+                _fonts = new FontState[3]
                 {
-                    gameFont = Text.Font,
-                    fonts = new FontState[3] {
-                        new FontState(GameFont.Tiny),
-                        new FontState(GameFont.Small),
-                        new FontState(GameFont.Medium),
-                    },
-                    color = GUI.color,
-                    contentColor = GUI.contentColor,
-                    backgroundColor = GUI.backgroundColor,
-                    wordWrap = Text.WordWrap,
-                };
-            }
+                    new(GameFont.Tiny), new(GameFont.Small), new(GameFont.Medium)
+                },
+                _color           = GUI.color,
+                _contentColor    = GUI.contentColor,
+                _backgroundColor = GUI.backgroundColor,
+                _wordWrap        = Text.WordWrap
+            };
 
-            public void Restore()
-            {
-                for (int i = 0; i < 3; i++)
-                {
-                    fonts[i].Restore();
-                }
-                Text.Font = gameFont;
-                GUI.color = color;
-                GUI.contentColor = contentColor;
-                GUI.backgroundColor = backgroundColor;
-                Text.WordWrap = wordWrap;
-                Text.Anchor = TextAnchor.UpperLeft;
-            }
-        }
-
-        private static int depth = 0;
-        private static GUIState initialState;
-
-        public static void StashGUIState()
+        public void Restore()
         {
-            if (depth == 0)
-            {
-                initialState = GUIState.Copy();
-            }
-            depth++;
-        }
-
-        public static void RestoreGUIState()
-        {
-            initialState.Restore();
-            depth--;
-        }
-
-        public static void ClearGUIState()
-        {
-            depth = 0;
-            initialState.Restore();
+            for (var i = 0; i < 3; i++) { _fonts[i].Restore(); }
+            Text.Font           = _gameFont;
+            GUI.color           = _color;
+            GUI.contentColor    = _contentColor;
+            GUI.backgroundColor = _backgroundColor;
+            Text.WordWrap       = _wordWrap;
+            Text.Anchor         = TextAnchor.UpperLeft;
         }
     }
 }

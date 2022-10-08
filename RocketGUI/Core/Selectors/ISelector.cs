@@ -1,54 +1,51 @@
-﻿using System;
+﻿namespace RocketGUI.Core.Selectors;
+
+using System;
 using UnityEngine;
 using Verse;
 
-namespace RocketGUI
+public abstract class Selector : Window
 {
-    public abstract class ISelector : Window
+    private readonly Action _closeAction;
+
+    protected bool _integrated;
+
+    protected Vector2 _scrollPosition = Vector2.zero;
+
+    protected Selector(bool integrated = false, Action closeAction = null)
     {
-        protected readonly Action closeAction;
+        _integrated  = integrated;
+        _closeAction = closeAction;
+    }
 
-        protected bool integrated;
+    public override void DoWindowContents(Rect inRect)
+    {
+        _integrated = false;
 
-        public Vector2 scrollPosition = Vector2.zero;
-
-        public ISelector(bool integrated = false, Action closeAction = null)
-        {
-            this.integrated = integrated;
-            this.closeAction = closeAction;
-        }
-
-        public override void DoWindowContents(Rect inRect)
-        {
-            integrated = false;
-            GUIUtility.ExecuteSafeGUIAction(() =>
+        Core.GUIUtility.ExecuteSafeGUIAction(
+            () =>
             {
-                if (Widgets.ButtonText(inRect.BottomPartPixels(30), "Close"))
-                {
-                    Close();
-                }
+                if (Widgets.ButtonText(inRect.BottomPartPixels(30), "Close")) { Close(); }
                 inRect.yMax -= 35;
                 DoContent(inRect);
-            });
-        }
+            }
+        );
+    }
 
-        public void DoIntegratedContents(Rect inRect)
-        {
-            GUIUtility.ExecuteSafeGUIAction(() =>
+    public void DoIntegratedContents(Rect inRect) =>
+        Core.GUIUtility.ExecuteSafeGUIAction(
+            () =>
             {
-                integrated = true;
+                _integrated = true;
                 DoContent(inRect);
-            });
-        }
+            }
+        );
 
-        public abstract void DoContent(Rect inRect);
+    protected abstract void DoContent(Rect inRect);
 
-        public override void Close(bool doCloseSound = true)
-        {
-            if (!integrated)
-                base.Close(doCloseSound);
-            else
-                closeAction.Invoke();
-        }
+    public override void Close(bool doCloseSound = true)
+    {
+        if (!_integrated) { base.Close(doCloseSound); }
+        else { _closeAction.Invoke(); }
     }
 }

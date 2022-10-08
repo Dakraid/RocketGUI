@@ -1,65 +1,59 @@
-﻿using System;
+﻿namespace RocketGUI.Core.Selectors;
+
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using Verse;
 
-namespace RocketGUI
+public abstract class SelectorGenericSelection<T> : Selector
 {
-    public abstract class ISelector_GenericSelection<T> : ISelector
+    private readonly IEnumerable<T> _items;
+
+    protected string _searchString = "";
+
+    protected readonly Action<T> _selectionAction;
+
+    private readonly bool _useSearchBar = true;
+
+    protected SelectorGenericSelection(IEnumerable<T> defs, Action<T> selectionAction, bool integrated = false, Action closeAction = null) : base(integrated, closeAction)
     {
-        public IEnumerable<T> items;
+        _items           = defs;
+        _selectionAction = selectionAction;
+    }
 
-        public Action<T> selectionAction;
+    protected virtual float RowHeight => 28f;
 
-        public string searchString = "";
+    protected abstract void DoSingleItem(Rect rect, T item);
 
-        public bool useSearchBar = true;
+    protected abstract bool ItemMatchSearchString(T item);
 
-        public ISelector_GenericSelection(IEnumerable<T> defs, Action<T> selectionAction, bool integrated = false,
-            Action closeAction = null) : base(integrated, closeAction)
+    protected override void DoContent(Rect inRect)
+    {
+        if (_useSearchBar)
         {
-            items = defs;
-            this.selectionAction = selectionAction;
+            var searchRect = inRect.TopPartPixels(25);
+            Text.Font = GameFont.Tiny;
+
+            if (Widgets.ButtonImage(searchRect.LeftPartPixels(25), TexButton.OpenInspector)) { }
+            searchRect.xMin += 25;
+            _searchString   =  Widgets.TextField(searchRect, _searchString).ToLower();
+            inRect.yMin     += 30;
         }
 
-        public virtual float RowHeight => 28f;
-
-        protected abstract void DoSingleItem(Rect rect, T item);
-
-        protected abstract bool ItemMatchSearchString(T item);
-
-        public override void DoContent(Rect inRect)
+        try
         {
-            if (useSearchBar)
-            {
-                Rect searchRect = inRect.TopPartPixels(25);
-                Text.Font = GameFont.Tiny;
-                if (Widgets.ButtonImage(searchRect.LeftPartPixels(25), TexButton.OpenInspector))
+            Core.GUIUtility.ScrollView(
+                inRect, ref _scrollPosition, _items, item => !_searchString.NullOrEmpty() ? ItemMatchSearchString(item) ? RowHeight : -1f : RowHeight, (rect, item) =>
                 {
+                    DoSingleItem(rect, item);
+
+                    if (!Widgets.ButtonInvisible(rect)) { return; }
+                    _selectionAction.Invoke(item);
+
+                    if (!_integrated) { Close(); }
                 }
-                searchRect.xMin += 25;
-                searchString = Widgets.TextField(searchRect, searchString).ToLower();
-                inRect.yMin += 30;
-            }
-            try
-            {
-                GUIUtility.ScrollView(inRect, ref scrollPosition, items,
-                    heightLambda: (item) => !searchString.NullOrEmpty() ? (ItemMatchSearchString(item) ? RowHeight : -1f) : RowHeight,
-                    elementLambda: (rect, item) =>
-                    {
-                        DoSingleItem(rect, item);
-                        if (Widgets.ButtonInvisible(rect))
-                        {
-                            selectionAction.Invoke(item);
-                            if (!integrated) Close();
-                        }
-                    });
-            }
-            catch (Exception er)
-            {
-                Log.Error(er.ToString());
-            }
+            );
         }
+        catch (Exception er) { Log.Error(er.ToString()); }
     }
 }

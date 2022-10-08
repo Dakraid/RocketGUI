@@ -1,213 +1,191 @@
-﻿using System;
+﻿using GUILambda = System.Action<UnityEngine.Rect>;
+
+namespace RocketGUI.Core.Listings;
+
+using Core;
+
+using System;
 using System.Collections.Generic;
-using System.Diagnostics.Eventing.Reader;
-using System.IO.Ports;
-using System.Linq;
-using RimWorld;
+
 using UnityEngine;
+
 using Verse;
-using GUILambda = System.Action<UnityEngine.Rect>;
 
-namespace RocketGUI
+public sealed class ListingCollapsible : ListingCustom
 {
-    public class Listing_Collapsible : IListing_Custom
+    private bool _expanded;
+    private GroupCollapsible _group;
+
+    public ListingCollapsible(bool expanded = false, bool scrollViewOnOverflow = true) : base(scrollViewOnOverflow)
     {
-        private Group_Collapsible group;
+        _expanded = expanded;
+        _group    = new GroupCollapsible();
+    }
 
-        private bool expanded = false;
+    public ListingCollapsible(GroupCollapsible group, bool expanded = false, bool scrollViewOnOverflow = true) : base(scrollViewOnOverflow)
+    {
+        _expanded = expanded;
+        _group    = group;
+        _group.Register(this);
+    }
 
-        public class Group_Collapsible
+    public GroupCollapsible Group
+    {
+        get => _group;
+
+        set
         {
-            private List<Listing_Collapsible> collapsibles;
-
-            public List<Listing_Collapsible> AllCollapsibles
-            {
-                get => collapsibles != null ? collapsibles : collapsibles = new List<Listing_Collapsible>();
-            }
-
-            public void CollapseAll()
-            {
-                foreach (Listing_Collapsible collapsible in AllCollapsibles)
-                {
-                    collapsible.expanded = false;
-                }
-            }
-
-            public void Register(Listing_Collapsible collapsible)
-            {
-                AllCollapsibles.Add(collapsible);
-
-                collapsible.expanded = false;
-            }
+            _group.AllCollapsibles.RemoveAll(c => c == this);
+            _group = value;
+            _group.Register(this);
         }
+    }
 
-        public Group_Collapsible Group
+    public bool Expanded
+    {
+        get => _expanded;
+
+        private set
         {
-            get => group;
-            set
+            _group.CollapseAll();
+            _expanded = value;
+        }
+    }
+
+    public void Begin(Rect inRect, TaggedString title, bool drawInfo = true, bool drawIcon = true, bool highlightIfMouseOver = true)
+    {
+        base.Begin(inRect);
+
+        Core.GUIUtility.ExecuteSafeGUIAction(
+            () =>
             {
-                group.AllCollapsibles.RemoveAll(c => c == this);
-                group = value;
-                group.Register(this);
-            }
-        }
-
-        public bool Expanded
-        {
-            get => this.expanded;
-            set
-            {
-                this.group.CollapseAll();
-                this.expanded = value;
-            }
-        }
-
-        public Listing_Collapsible(bool expanded = false, bool scrollViewOnOverflow = true) : base(scrollViewOnOverflow)
-        {
-            this.expanded = expanded;
-            this.group = new Group_Collapsible();
-        }
-
-        public Listing_Collapsible(Group_Collapsible group, bool expanded = false, bool scrollViewOnOverflow = true) : base(scrollViewOnOverflow)
-        {
-            this.expanded = expanded;
-            this.group = group;
-            this.group.Register(this);
-        }
-
-        public virtual void Begin(Rect inRect, TaggedString title, bool drawInfo = true, bool drawIcon = true, bool hightlightIfMouseOver = true)
-        {
-            base.Begin(inRect);
-            GUIUtility.ExecuteSafeGUIAction(() =>
-            {
-                Text.Font = GameFont.Tiny;
+                Text.Font   = GameFont.Tiny;
                 Text.Anchor = TextAnchor.MiddleLeft;
-                RectSlice slice = Slice(title.GetTextHeight(this.insideWidth - 30f));
-                if (hightlightIfMouseOver)
-                {
-                    Widgets.DrawHighlightIfMouseover(slice.outside);
-                }
-                Rect titleRect = slice.inside;
-                GUIUtility.ExecuteSafeGUIAction(() =>
-                {
-                    GUI.color = this.CollapsibleBGBorderColor;
-                    GUI.color = Color.gray;
-                    if (drawInfo)
+                var slice = Slice(title.GetTextHeight(InsideWidth - 30f));
+
+                if (highlightIfMouseOver) { Widgets.DrawHighlightIfMouseover(slice._outside); }
+                var titleRect = slice._inside;
+
+                Core.GUIUtility.ExecuteSafeGUIAction(
+                    () =>
                     {
-                        Text.Font = GameFont.Tiny;
+                        GUI.color = _collapsibleBgColor;
+                        GUI.color = Color.gray;
+
+                        if (!drawInfo) { return; }
+                        Text.Font   = GameFont.Tiny;
                         Text.Anchor = TextAnchor.MiddleRight;
-                        Widgets.Label(titleRect, !expanded ? "Collapsed" : "Expanded");
+                        Widgets.Label(titleRect, !_expanded ? "Collapsed" : "Expanded");
                     }
-                });
-                GUIUtility.ExecuteSafeGUIAction(() =>
-                {
-                    Text.Font = GameFont.Small;
-                    Text.CurFontStyle.fontStyle = FontStyle.Normal;
-                    Text.CurFontStyle.fontSize = 12;
-                    Text.Anchor = TextAnchor.MiddleLeft;
-                    GUI.color = this.CollapsibleBGBorderColor;
-                    GUI.color = Color.gray;
-                    if (drawIcon)
+                );
+
+                Core.GUIUtility.ExecuteSafeGUIAction(
+                    () =>
                     {
-                        Widgets.DrawTextureFitted(titleRect.LeftPartPixels(25), expanded ? TexButton.Collapse : TexButton.Reveal, 0.65f);
-                        titleRect.xMin += 35;
+                        Text.Font                   = GameFont.Small;
+                        Text.CurFontStyle.fontStyle = FontStyle.Normal;
+                        Text.CurFontStyle.fontSize  = 12;
+                        Text.Anchor                 = TextAnchor.MiddleLeft;
+                        GUI.color                   = _collapsibleBgColor;
+                        GUI.color                   = Color.gray;
+
+                        if (drawIcon)
+                        {
+                            Widgets.DrawTextureFitted(titleRect.LeftPartPixels(25), _expanded ? TexButton.Collapse : TexButton.Reveal, 0.65f);
+                            titleRect.xMin += 35;
+                        }
+                        GUI.color = Color.white;
+                        Widgets.Label(titleRect, title);
                     }
-                    GUI.color = Color.white;
-                    Widgets.Label(titleRect, title);
-                });
-                if (Widgets.ButtonInvisible(slice.outside))
-                {
-                    Expanded = !Expanded;
-                }
-                GUI.color = this.CollapsibleBGBorderColor;
-                Widgets.DrawBox(slice.outside, 1);
-            });
-            if (Expanded)
-            {
-                this.Gap(2);
+                );
+
+                if (Widgets.ButtonInvisible(slice._outside)) { Expanded = !Expanded; }
+                GUI.color = _collapsibleBgColor;
+                Widgets.DrawBox(slice._outside);
             }
-            base.Start();
+        );
+
+        if (Expanded) { Gap(2); }
+        Start();
+    }
+
+    public void Label(TaggedString text, string tooltip = null, bool invert = false, bool highlightIfMouseOver = true, GameFont fontSize = GameFont.Tiny, FontStyle fontStyle = FontStyle.Normal)
+    {
+        if (invert == _expanded) { return; }
+        base.Label(text, tooltip, highlightIfMouseOver, fontSize, fontStyle);
+    }
+
+    public bool CheckboxLabeled(
+        TaggedString text,
+        ref bool checkOn,
+        string tooltip = null,
+        bool invert = false,
+        bool disabled = false,
+        bool highlightIfMouseOver = true,
+        GameFont fontSize = GameFont.Tiny,
+        FontStyle fontStyle = FontStyle.Normal
+    ) => invert != _expanded && base.CheckboxLabeled(text, ref checkOn, tooltip, disabled, highlightIfMouseOver, fontSize, fontStyle);
+
+    public void DropDownMenu<T>(
+        string text,
+        T selection,
+        Func<T, string> labelLambda,
+        Action<T> selectedLambda,
+        IEnumerable<T> options,
+        bool invert = false,
+        bool disabled = false,
+        GameFont fontSize = GameFont.Tiny,
+        FontStyle fontStyle = FontStyle.Normal
+    )
+    {
+        if (invert == _expanded) { return; }
+        base.DropDownMenu(text, selection, labelLambda, selectedLambda, options, disabled, fontSize, fontStyle);
+    }
+
+    public void Columns(float height, IEnumerable<GUILambda> lambdas, float gap = 5, bool invert = false, bool useMargins = false, Action fallback = null)
+    {
+        if (invert == _expanded) { return; }
+        base.Columns(height, lambdas, gap, useMargins, fallback);
+    }
+
+    public void Lambda(float height, GUILambda contentLambda, bool invert = false, bool useMargins = false, Action fallback = null)
+    {
+        if (invert == _expanded) { return; }
+        base.Lambda(height, contentLambda, useMargins, fallback);
+    }
+
+    public bool ButtonText(TaggedString text, bool disabled = false, bool invert = false, bool drawBackground = true) => invert != _expanded && base.ButtonText(text, disabled, drawBackground);
+
+    private void Gap(float height = 9f, bool invert = false)
+    {
+        if (_expanded != invert) { base.Gap(height); }
+    }
+
+    public void Line(float thickness, bool invert = false)
+    {
+        if (_expanded != invert) { base.Line(thickness); }
+    }
+
+    public override void End(ref Rect inRect) => base.End(ref inRect);
+
+    protected override RectSlice Slice(float height, bool includeMargins = true) => base.Slice(height, includeMargins);
+
+    public class GroupCollapsible
+    {
+        private List<ListingCollapsible> _collapsibles;
+
+        public List<ListingCollapsible> AllCollapsibles => _collapsibles ??= new List<ListingCollapsible>();
+
+        public void CollapseAll()
+        {
+            foreach (var collapsible in AllCollapsibles) { collapsible._expanded = false; }
         }
 
-        public void Label(TaggedString text, string tooltip = null, bool invert = false, bool hightlightIfMouseOver = true, GameFont fontSize = GameFont.Tiny, FontStyle fontStyle = FontStyle.Normal)
+        public void Register(ListingCollapsible collapsible)
         {
-            if (invert == this.expanded)
-            {
-                return;
-            }
-            base.Label(text, tooltip, hightlightIfMouseOver, fontSize, fontStyle);
-        }
+            AllCollapsibles.Add(collapsible);
 
-        public bool CheckboxLabeled(TaggedString text, ref bool checkOn, string tooltip = null, bool invert = false, bool disabled = false, bool hightlightIfMouseOver = true, GameFont fontSize = GameFont.Tiny, FontStyle fontStyle = FontStyle.Normal)
-        {
-            if (invert == this.expanded)
-            {
-                return false;
-            }
-            return base.CheckboxLabeled(text, ref checkOn, tooltip, disabled, hightlightIfMouseOver, fontSize, fontStyle);
-        }
-
-
-        public void DropDownMenu<T>(string text, T selection, Func<T, string> labelLambda, Action<T> selectedLambda, IEnumerable<T> options, bool invert = false, bool disabled = false, GameFont fontSize = GameFont.Tiny, FontStyle fontStyle = FontStyle.Normal)
-        {
-            if (invert == this.expanded)
-            {
-                return;
-            }
-            base.DropDownMenu(text, selection, labelLambda, selectedLambda, options, disabled, fontSize: fontSize, fontStyle: fontStyle);
-        }
-
-        public void Columns(float height, IEnumerable<GUILambda> lambdas, float gap = 5, bool invert = false, bool useMargins = false, Action fallback = null)
-        {
-            if (invert == expanded)
-            {
-                return;
-            }
-            base.Columns(height, lambdas, gap, useMargins, fallback);
-        }
-
-        public void Lambda(float height, GUILambda contentLambda, bool invert = false, bool useMargins = false, Action fallback = null)
-        {
-            if (invert == expanded)
-            {
-                return;
-            }
-            base.Lambda(height, contentLambda, useMargins, fallback);
-        }
-
-        public bool ButtonText(TaggedString text, bool disabled = false, bool invert = false, bool drawBackground = true)
-        {
-            if (invert == expanded)
-            {
-                return false;
-            }
-            return base.ButtonText(text, disabled, drawBackground);
-        }
-
-        public void Gap(float height = 9f, bool invert = false)
-        {
-            if (expanded != invert)
-            {
-                base.Gap(height);
-            }
-        }
-
-        public void Line(float thickness, bool invert = false)
-        {
-            if (expanded != invert)
-            {
-                base.Line(thickness);
-            }
-        }
-
-        public override void End(ref Rect inRect)
-        {
-            base.End(ref inRect);
-        }
-
-        protected override RectSlice Slice(float height, bool includeMargins = true)
-        {
-            return base.Slice(height, includeMargins);
+            collapsible._expanded = false;
         }
     }
 }
